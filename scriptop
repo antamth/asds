@@ -1,0 +1,411 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "🔥WestBound 🔫",
+   LoadingTitle = "🔫 WestBound 💥",
+   LoadingSubtitle = "by Antam",
+   ConfigurationSaving = {
+      Enabled = false,
+      FolderName = nil,
+      FileName = "Example Hub"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false,
+   KeySettings = {
+      Title = "Key | Youtube Hub",
+      Subtitle = "Key System",
+      Note = "Key In Discord Server",
+      FileName = "YoutubeHubKey1",
+      SaveKey = false,
+      GrabKeyFromSite = true,
+      Key = {"https://pastebin.com/raw/AtgzSPWK"}
+   }
+})
+
+local MainTab = Window:CreateTab("🏠 Home", nil)
+local MainSection = MainTab:CreateSection("Main")
+
+Rayfield:Notify({
+   Title = "You executed the script",
+   Content = "Very cool GUI",
+   Duration = 5,
+   Image = 13047715178,
+   Actions = {
+      Ignore = {
+         Name = "Okay!",
+         Callback = function()
+            print("The user tapped Okay!")
+         end
+      },
+   },
+})
+
+-- Aim-lock with adjustable circle
+local aimLockEnabled = false
+local aimCircleRadius = 100 -- Default radius
+local aimCircle = Drawing.new("Circle")
+aimCircle.Color = Color3.fromRGB(255, 0, 0)
+aimCircle.Thickness = 2
+aimCircle.Filled = false
+aimCircle.Transparency = 1
+aimCircle.Radius = aimCircleRadius
+aimCircle.Visible = false
+
+local function updateAimCircle()
+    -- Update the position of the aim circle to the center of the screen
+    local screenCenter = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+    aimCircle.Position = screenCenter
+end
+
+local function getNearestPlayerInCircle()
+    local nearestPlayer = nil
+    local nearestDistance = aimCircleRadius -- Only lock on players within this radius
+    local screenCenter = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            local headPosition = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+            local distance = (Vector2.new(headPosition.X, headPosition.Y) - screenCenter).Magnitude
+
+            if distance < nearestDistance then
+                nearestDistance = distance
+                nearestPlayer = head
+            end
+        end
+    end
+
+    return nearestPlayer
+end
+
+local function aimAtPlayerInCircle()
+    while aimLockEnabled do
+        local nearestHead = getNearestPlayerInCircle()
+        if nearestHead then
+            game.Workspace.CurrentCamera.CFrame = CFrame.new(game.Workspace.CurrentCamera.CFrame.Position, nearestHead.Position)
+        end
+        wait(0.01) -- Updates every 10 milliseconds
+    end
+end
+
+-- Slider to adjust the size of the aim circle
+local Slider = MainTab:CreateSlider({
+   Name = "Aim Circle Size",
+   Range = {50, 500},
+   Increment = 10,
+   Suffix = "Radius",
+   CurrentValue = aimCircleRadius,
+   Flag = "sliderCircleRadius",
+   Callback = function(Value)
+       aimCircleRadius = Value
+       aimCircle.Radius = aimCircleRadius -- Update the circle's radius
+   end,
+})
+
+-- Button to toggle aim-lock
+local aimButton = MainTab:CreateButton({
+   Name = "Toggle Aim-Lock",
+   Callback = function()
+       aimLockEnabled = not aimLockEnabled
+       aimCircle.Visible = aimLockEnabled -- Show or hide the circle based on aim-lock state
+       updateAimCircle() -- Update circle position to the screen center
+       
+       if aimLockEnabled then
+           Rayfield:Notify({
+               Title = "Aim-Lock Activated!",
+               Content = "Locking on players within the circle.",
+               Duration = 5,
+           })
+           coroutine.wrap(aimAtPlayerInCircle)() -- Start aim-locking in the background
+       else
+           Rayfield:Notify({
+               Title = "Aim-Lock Deactivated!",
+               Content = "Aim-Lock has been turned off.",
+               Duration = 5,
+           })
+       end
+   end,
+})
+
+-- Keep updating the aim circle's position on the screen
+game:GetService("RunService").RenderStepped:Connect(function()
+    if aimLockEnabled then
+        updateAimCircle() -- Constantly update circle position to the center of the screen
+    end
+end)
+
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and aimLockEnabled then
+        aimAtPlayerInCircle()
+    end
+end)
+
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        aimLockEnabled = false
+    end
+end)
+
+local highlightPlayers = false
+local highlightColor = Color3.fromRGB(255, 0, 0) -- Red highlight
+
+-- Function to apply highlights to all players
+local function applyHighlight(player)
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local character = player.Character
+        if character:FindFirstChildOfClass("Highlight") then
+            character:FindFirstChildOfClass("Highlight"):Destroy()
+        end
+
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = character
+        highlight.FillColor = highlightColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = highlightColor
+        highlight.Parent = character
+    end
+end
+
+-- Function to create tracers
+local tracers = {}
+
+local function createTracer(player)
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local tracer = Drawing.new("Line")
+        tracer.Color = highlightColor
+        tracer.Thickness = 2
+        tracer.Transparency = 1
+        tracers[player] = tracer
+    end
+end
+
+local function updateTracers()
+    for player, tracer in pairs(tracers) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = player.Character.HumanoidRootPart
+            local rootPosition, onScreen = workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position)
+            local playerPosition = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+            local screenPosition = workspace.CurrentCamera:WorldToViewportPoint(playerPosition)
+            
+            if onScreen then
+                tracer.From = Vector2.new(screenPosition.X, screenPosition.Y)
+                tracer.To = Vector2.new(rootPosition.X, rootPosition.Y)
+                tracer.Visible = true
+            else
+                tracer.Visible = false
+            end
+        else
+            tracer.Visible = false
+        end
+    end
+end
+
+local function removeTracers()
+    for _, tracer in pairs(tracers) do
+        tracer:Remove()
+    end
+    tracers = {}
+end
+
+local function highlightAllPlayers()
+    while highlightPlayers do
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            applyHighlight(player) -- Apply highlight
+            if not tracers[player] then
+                createTracer(player) -- Create tracer
+            end
+        end
+        updateTracers() -- Update tracer positions
+        wait(0.001) -- Update every millisecond for precision tracking
+    end
+    removeTracers() -- Remove tracers when highlighting is turned off
+end
+
+-- Button to toggle player highlighting and tracers
+local ButtonHighlight = MainTab:CreateButton({
+   Name = "Toggle Player Highlighting and Tracers",
+   Callback = function()
+       highlightPlayers = not highlightPlayers
+       if highlightPlayers then
+           Rayfield:Notify({
+               Title = "Highlighting and Tracers Activated!",
+               Content = "Players will be highlighted and tracers will be drawn.",
+               Duration = 5,
+           })
+           coroutine.wrap(highlightAllPlayers)() -- Start highlighting and tracing
+       else
+           Rayfield:Notify({
+               Title = "Highlighting and Tracers Deactivated!",
+               Content = "Players will no longer be highlighted or traced.",
+               Duration = 5,
+           })
+
+           -- Remove highlights and tracers when deactivating
+           for _, player in ipairs(game.Players:GetPlayers()) do
+               if player.Character and player.Character:FindFirstChildOfClass("Highlight") then
+                   player.Character:FindFirstChildOfClass("Highlight"):Destroy()
+               end
+           end
+           removeTracers()
+       end
+   end,
+})
+
+local Button = MainTab:CreateButton({
+   Name = "Infinite Jump Toggle",
+   Callback = function()
+       _G.infinjump = not _G.infinjump
+
+       if _G.infinJumpStarted == nil then
+           _G.infinJumpStarted = true
+
+           game.StarterGui:SetCore("SendNotification", {Title="Youtube Hub"; Text="Infinite Jump Activated!"; Duration=5;})
+
+           local plr = game:GetService('Players').LocalPlayer
+           local m = plr:GetMouse()
+           m.KeyDown:connect(function(k)
+               if _G.infinjump then
+                   if k:byte() == 32 then
+                       local humanoid = game:GetService('Players').LocalPlayer.Character:FindFirstChildOfClass('Humanoid')
+                       humanoid:ChangeState('Jumping')
+                       wait()
+                       humanoid:ChangeState('Seated')
+                   end
+               end
+           end)
+       end
+   end,
+})
+
+local Slider = MainTab:CreateSlider({
+   Name = "WalkSpeed Slider",
+   Range = {1, 350},
+   Increment = 1,
+   Suffix = "Speed",
+   CurrentValue = 16,
+   Flag = "sliderws",
+   Callback = function(Value)
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = (Value)
+   end,
+})
+
+-- Fly Function
+local flying = false
+local flySpeed = 50 -- Set default fly speed
+local flyUpSpeed = 0 -- Upward/downward speed
+local flyDirection = Vector3.new(0, 0, 0) -- Movement direction
+
+local bodyVelocity
+local bodyGyro
+
+local function startFlying()
+    local plr = game.Players.LocalPlayer
+    local char = plr.Character
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+
+    bodyVelocity = Instance.new("BodyVelocity", hrp)
+    bodyVelocity.MaxForce = Vector3.new(1000000, 1000000, 1000000)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+
+    bodyGyro = Instance.new("BodyGyro", hrp)
+    bodyGyro.MaxTorque = Vector3.new(1000000, 1000000, 1000000)
+    bodyGyro.CFrame = hrp.CFrame
+
+    local function updateFly()
+        while flying do
+            bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            bodyVelocity.Velocity = flyDirection * flySpeed + Vector3.new(0, flyUpSpeed, 0)
+            wait()
+        end
+    end
+
+    coroutine.wrap(updateFly)()
+end
+
+local function stopFlying()
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
+end
+
+local UIS = game:GetService("UserInputService")
+local flyKeys = {W = false, A = false, S = false, D = false, Space = false, Control = false}
+
+local function updateFlyDirection()
+    local cam = workspace.CurrentCamera
+    local forward = cam.CFrame.lookVector
+    local right = cam.CFrame.rightVector
+
+    flyDirection = Vector3.new(0, 0, 0)
+
+    if flyKeys.W then
+        flyDirection = flyDirection + forward
+    elseif flyKeys.S then
+        flyDirection = flyDirection - forward
+    end
+
+    if flyKeys.A then
+        flyDirection = flyDirection - right
+    elseif flyKeys.D then
+        flyDirection = flyDirection + right
+    end
+
+    if flyKeys.Space then
+        flyUpSpeed = flySpeed
+    elseif flyKeys.Control then
+        flyUpSpeed = -flySpeed
+    else
+        flyUpSpeed = 0
+    end
+end
+
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if flyKeys[input.KeyCode.Name] ~= nil then
+            flyKeys[input.KeyCode.Name] = true
+            updateFlyDirection()
+        end
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if flyKeys[input.KeyCode.Name] ~= nil then
+            flyKeys[input.KeyCode.Name] = false
+            updateFlyDirection()
+        end
+    end
+end)
+
+local function toggleFly()
+    flying = not flying
+    if flying then
+        startFlying()
+        Rayfield:Notify({
+            Title = "Fly Activated!",
+            Content = "You are now flying.",
+            Duration = 5,
+        })
+    else
+        stopFlying()
+        Rayfield:Notify({
+            Title = "Fly Deactivated!",
+            Content = "You have stopped flying.",
+            Duration = 5,
+        })
+    end
+end
+
+local flyButton = MainTab:CreateButton({
+    Name = "Toggle Fly",
+    Callback = function()
+        toggleFly()
+    end,
+})
+
+
+
+
